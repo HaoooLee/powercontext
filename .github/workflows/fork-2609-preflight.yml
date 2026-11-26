@@ -1,0 +1,46 @@
+name: 'PowerContext #2609 fork preflight'
+
+on:
+  push:
+    branches: [codex/2609-fork-ci]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'HaoooLee/powercontext'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: e6719150f3c61b4f852c7abe54dedce8e53cbfc6
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.10.12'
+          enable-cache: false
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Run repository checks
+        run: make check
+
+      - name: Validate migration history and replay
+        run: |
+          uv run --locked python scripts/schema_release.py check --base-ref d1604f225f33d8c84be32cccbbedb1532e5e0f43
+          uv run --locked pytest tests/test_schema_release.py tests/test_schema_draft.py -q
+
+      - name: Check API contracts
+        run: make contract-test
+
+      - name: Check Skill compatibility through HTTP
+        run: uv run --locked pytest tests/e2e/test_standard_skill_lifecycle.py tests/e2e/test_external_skill_registry.py -q
